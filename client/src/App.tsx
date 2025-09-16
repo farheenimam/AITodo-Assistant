@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -9,74 +9,11 @@ import AuthForm from "./components/AuthForm";
 import DashboardSidebar from "./components/DashboardSidebar";
 import TaskDashboard from "./components/TaskDashboard";
 import ThemeToggle from "./components/ThemeToggle";
-import { type Task } from "./components/TaskCard";
-import { type TaskFormData } from "./components/TaskForm";
+import { authService, type User } from "./lib/auth";
+import { apiService, type Task, type TaskFormData } from "./lib/api";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data for the prototype - todo: remove mock functionality
-const mockUser = {
-  id: "1",
-  name: "Sarah Johnson",
-  email: "sarah@example.com",
-  isPremium: false,
-  avatar: undefined
-};
-
-const mockTasks: Task[] = [
-  {
-    id: "1",
-    title: "Complete quarterly presentation",
-    description: "Prepare slides for Q4 review meeting with stakeholders and include key performance metrics",
-    deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    priority: "High",
-    status: "Incomplete",
-    aiSuggestion: "Consider focusing on key metrics first, then add supporting data. Schedule 2 hours for this task tomorrow morning when you're most productive.",
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000)
-  },
-  {
-    id: "2",
-    title: "Review team feedback",
-    description: "Go through all team member responses from last sprint retrospective",
-    deadline: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    priority: "Medium",
-    status: "Incomplete",
-    aiSuggestion: "This task pairs well with your 2pm meeting. Review feedback 30 minutes before the meeting to prepare talking points.",
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: "3",
-    title: "Buy groceries",
-    priority: "Low",
-    status: "Complete",
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: "4",
-    title: "Update project documentation",
-    description: "Add new API endpoints and update README with installation instructions",
-    deadline: new Date(Date.now() - 24 * 60 * 60 * 1000), // Overdue
-    priority: "Medium",
-    status: "Incomplete",
-    aiSuggestion: "This is overdue! Block 1 hour this afternoon to catch up. Start with the README updates as they're quickest.",
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: "5",
-    title: "Schedule dentist appointment",
-    priority: "Low",
-    status: "Incomplete",
-    createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: "6",
-    title: "Prepare for client meeting",
-    description: "Review contract terms and prepare presentation materials",
-    deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    priority: "High",
-    status: "Incomplete",
-    aiSuggestion: "High priority task with good lead time. Schedule this for tomorrow morning after the quarterly presentation work.",
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
-  }
-];
+// Application state management
 
 function Router() {
   return (
@@ -89,70 +26,165 @@ function Router() {
 }
 
 function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  if (isAuthenticated) {
-    // Redirect to dashboard after authentication
-    window.location.href = "/dashboard";
-    return null;
-  }
+  const handleLogin = async (data: { email: string; password: string }) => {
+    setIsLoading(true);
+    try {
+      await authService.login(data);
+      window.location.href = "/dashboard";
+    } catch (error) {
+      toast({
+        title: "Login failed",
+        description: error instanceof Error ? error.message : "Please check your credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async (data: { name: string; email: string; password: string }) => {
+    setIsLoading(true);
+    try {
+      await authService.signup(data);
+      window.location.href = "/dashboard";
+    } catch (error) {
+      toast({
+        title: "Signup failed",
+        description: error instanceof Error ? error.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = () => {
+    toast({
+      title: "Google OAuth",
+      description: "Google authentication coming soon!",
+    });
+  };
 
   return (
     <AuthForm
-      onLogin={(data) => {
-        console.log("Login:", data);
-        setIsAuthenticated(true);
-      }}
-      onSignup={(data) => {
-        console.log("Signup:", data);
-        setIsAuthenticated(true);
-      }}
-      onGoogleAuth={() => {
-        console.log("Google auth");
-        setIsAuthenticated(true);
-      }}
-      isLoading={false}
+      onLogin={handleLogin}
+      onSignup={handleSignup}
+      onGoogleAuth={handleGoogleAuth}
+      isLoading={isLoading}
     />
   );
 }
 
 function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
-  const [user, setUser] = useState(mockUser);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [user, setUser] = useState<User | null>(null);
   const [activeFilter, setActiveFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  const handleCreateTask = (data: TaskFormData) => {
-    const newTask: Task = {
-      id: (tasks.length + 1).toString(),
-      title: data.title,
-      description: data.description,
-      deadline: data.deadline,
-      priority: data.priority,
-      status: "Incomplete",
-      createdAt: new Date(),
-      // Add AI suggestion for new tasks if user has remaining suggestions
-      aiSuggestion: !user.isPremium && tasks.filter(t => t.aiSuggestion).length >= 5 
-        ? undefined 
-        : "AI will analyze this task and provide optimization suggestions shortly."
+  useEffect(() => {
+    const initializeDashboard = async () => {
+      try {
+        // Check if user is authenticated
+        const currentUser = await authService.getCurrentUser();
+        if (!currentUser) {
+          window.location.href = "/";
+          return;
+        }
+        
+        setUser(currentUser);
+
+        // Load tasks
+        const userTasks = await apiService.getTasks();
+        setTasks(userTasks);
+      } catch (error) {
+        console.error("Dashboard initialization error:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setTasks([newTask, ...tasks]);
+
+    initializeDashboard();
+  }, [toast]);
+
+  const handleCreateTask = async (data: TaskFormData) => {
+    try {
+      const newTask = await apiService.createTask(data);
+      setTasks([newTask, ...tasks]);
+      toast({
+        title: "Task created",
+        description: "Your task has been added successfully!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create task",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUpdateTask = (taskId: string, updates: Partial<Task>) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, ...updates } : task
-    ));
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const updatedTask = await apiService.updateTask(taskId, updates);
+      setTasks(tasks.map(task => 
+        task.id === taskId ? updatedTask : task
+      ));
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update task",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await apiService.deleteTask(taskId);
+      setTasks(tasks.filter(task => task.id !== taskId));
+      toast({
+        title: "Task deleted",
+        description: "Task has been removed successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete task",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUpgrade = () => {
-    setUser({ ...user, isPremium: true });
+  const handleUpgrade = async () => {
+    try {
+      await apiService.activatePremium();
+      if (user) {
+        setUser({ ...user, isPremium: true });
+      }
+      toast({
+        title: "Premium activated!",
+        description: "You now have access to unlimited AI features",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to activate premium",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogout = () => {
+    authService.logout();
     window.location.href = "/";
   };
 
@@ -174,6 +206,14 @@ function Dashboard() {
       overdue
     };
   };
+
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">
