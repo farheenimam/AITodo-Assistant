@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Sparkles, 
   Crown, 
@@ -15,30 +14,83 @@ import {
 } from "lucide-react";
 import { SiSolana } from "react-icons/si";
 
+// Declare Crossmint global type
+declare global {
+  interface Window {
+    CrossmintCheckout: {
+      render: (config: any, selector: string) => void;
+    };
+  }
+}
+
 interface PremiumUpgradeProps {
-  onStripePayment: () => void;
-  onSolanaPayment: () => void;
+  onPaymentSuccess: (paymentData: any) => void;
   onClose?: () => void;
   isLoading?: boolean;
 }
 
 export default function PremiumUpgrade({ 
-  onStripePayment, 
-  onSolanaPayment, 
+  onPaymentSuccess, 
   onClose, 
   isLoading = false 
 }: PremiumUpgradeProps) {
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "solana">("stripe");
+  const [crossmintLoaded, setCrossmintLoaded] = useState(false);
+  const [crossmintInitialized, setCrossmintInitialized] = useState(false);
 
-  const handleStripePayment = () => {
-    console.log("Stripe payment initiated");
-    onStripePayment();
-  };
+  useEffect(() => {
+    // Load Crossmint script if not already loaded
+    if (!window.CrossmintCheckout) {
+      const script = document.createElement('script');
+      script.src = 'https://www.crossmint.io/checkout.js';
+      script.onload = () => {
+        setCrossmintLoaded(true);
+      };
+      document.head.appendChild(script);
+    } else {
+      setCrossmintLoaded(true);
+    }
 
-  const handleSolanaPayment = () => {
-    console.log("Solana payment initiated");
-    onSolanaPayment();
-  };
+    // Don't remove script on unmount to avoid reload latency
+  }, []);
+
+  useEffect(() => {
+    // Initialize Crossmint when both script is loaded and DOM is ready
+    if (crossmintLoaded && !crossmintInitialized) {
+      const checkoutContainer = document.getElementById('crossmint-checkout');
+      if (checkoutContainer && window.CrossmintCheckout) {
+        const environment = import.meta.env.PROD ? 'production' : 'staging';
+        const clientId = import.meta.env.VITE_CROSSMINT_CLIENT_API_KEY;
+        
+        if (!clientId) {
+          console.error('Crossmint client ID not found in environment variables');
+          return;
+        }
+
+        window.CrossmintCheckout.render({
+          clientId,
+          environment,
+          paymentMethods: ["credit_card", "crypto"],
+          // TODO: Move amount/currency to server-side session creation
+          amount: 9.99,
+          currency: "USD",
+          metadata: {
+            subscription: "premium",
+            plan: "monthly"
+          },
+          onSuccess: (paymentData: any) => {
+            console.log("Crossmint payment successful:", paymentData);
+            // TODO: Verify payment server-side before activating premium
+            onPaymentSuccess(paymentData);
+          },
+          onError: (error: any) => {
+            console.error("Crossmint payment error:", error);
+          }
+        }, "#crossmint-checkout");
+        
+        setCrossmintInitialized(true);
+      }
+    }
+  }, [crossmintLoaded, crossmintInitialized, onPaymentSuccess]);
 
   const handleClose = () => {
     console.log("Premium upgrade modal closed");
@@ -115,80 +167,42 @@ export default function PremiumUpgrade({
             </Badge>
           </div>
 
-          {/* Payment Methods */}
+          {/* Crossmint Payment */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-center">Choose Payment Method</h3>
+            <h3 className="text-lg font-semibold text-center">Secure Payment</h3>
             
-            <Tabs value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "stripe" | "solana")}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="stripe" className="flex items-center gap-2" data-testid="tab-stripe">
-                  <CreditCard className="w-4 h-4" />
-                  Card Payment
-                </TabsTrigger>
-                <TabsTrigger value="solana" className="flex items-center gap-2" data-testid="tab-solana">
-                  <SiSolana className="w-4 h-4" />
-                  Solana
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="stripe" className="space-y-4">
-                <div className="p-4 bg-card rounded-lg border">
-                  <div className="flex items-center gap-3 mb-3">
-                    <CreditCard className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <h4 className="font-medium">Credit/Debit Card</h4>
-                      <p className="text-sm text-muted-foreground">Secure payment via Stripe</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Check className="w-3 h-3" />
-                    <span>Instant activation</span>
-                    <Check className="w-3 h-3" />
-                    <span>Auto-renewal</span>
-                    <Check className="w-3 h-3" />
-                    <span>Cancel anytime</span>
-                  </div>
+            <div className="p-4 bg-card rounded-lg border">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center space-x-2">
+                  <CreditCard className="w-5 h-5 text-muted-foreground" />
+                  <SiSolana className="w-5 h-5 text-purple-500" />
                 </div>
-                <Button 
-                  onClick={handleStripePayment} 
-                  className="w-full" 
-                  size="lg"
-                  disabled={isLoading}
-                  data-testid="button-stripe-payment"
-                >
-                  {isLoading ? "Processing..." : "Subscribe with Card"}
-                </Button>
-              </TabsContent>
-
-              <TabsContent value="solana" className="space-y-4">
-                <div className="p-4 bg-card rounded-lg border">
-                  <div className="flex items-center gap-3 mb-3">
-                    <SiSolana className="w-5 h-5 text-purple-500" />
-                    <div>
-                      <h4 className="font-medium">Solana Payment</h4>
-                      <p className="text-sm text-muted-foreground">Pay with SOL via Crossmint</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Check className="w-3 h-3" />
-                    <span>Lower fees</span>
-                    <Check className="w-3 h-3" />
-                    <span>Blockchain verified</span>
-                    <Check className="w-3 h-3" />
-                    <span>Instant confirmation</span>
-                  </div>
+                <div>
+                  <h4 className="font-medium">Credit Card & Crypto</h4>
+                  <p className="text-sm text-muted-foreground">Secure payment via Crossmint</p>
                 </div>
-                <Button 
-                  onClick={handleSolanaPayment} 
-                  className="w-full bg-purple-600 hover:bg-purple-700" 
-                  size="lg"
-                  disabled={isLoading}
-                  data-testid="button-solana-payment"
-                >
-                  {isLoading ? "Processing..." : "Pay with Solana"}
-                </Button>
-              </TabsContent>
-            </Tabs>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Check className="w-3 h-3" />
+                <span>Instant activation</span>
+                <Check className="w-3 h-3" />
+                <span>Multiple payment options</span>
+                <Check className="w-3 h-3" />
+                <span>Secure & encrypted</span>
+              </div>
+            </div>
+
+            {/* Crossmint Checkout Widget */}
+            <div className="min-h-[200px] border rounded-lg p-4 bg-card">
+              <div id="crossmint-checkout" data-testid="crossmint-checkout">
+                {!crossmintLoaded && (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                    <span className="ml-3 text-muted-foreground">Loading payment options...</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Footer */}

@@ -67,7 +67,7 @@ export default function TaskDashboard({
         matchesFilter = task.status === "Complete";
         break;
       case "overdue":
-        matchesFilter = task.deadline && new Date() > task.deadline && task.status === "Incomplete";
+        matchesFilter = !!(task.deadline && new Date() > task.deadline && task.status === "Incomplete");
         break;
       default:
         matchesFilter = true;
@@ -310,13 +310,8 @@ export default function TaskDashboard({
       {/* Premium Upgrade Modal */}
       {showUpgrade && (
         <PremiumUpgrade
-          onStripePayment={() => {
-            console.log("Stripe payment initiated");
-            setShowUpgrade(false);
-            onUpgrade();
-          }}
-          onSolanaPayment={() => {
-            console.log("Solana payment initiated");
+          onPaymentSuccess={(paymentData) => {
+            console.log("Payment successful:", paymentData);
             setShowUpgrade(false);
             onUpgrade();
           }}
