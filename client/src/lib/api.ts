@@ -8,6 +8,7 @@ export interface Task {
   deadline: Date | null;
   priority: "High" | "Medium" | "Low";
   status: "Incomplete" | "Complete";
+  aiSuggestion: string | null;
   createdAt: Date;
 }
 
@@ -19,9 +20,10 @@ export interface TaskFormData {
 }
 
 class ApiService {
-  private getAuthHeaders() {
+  private getAuthHeaders(): Record<string, string> {
     const token = authService.getToken();
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
+    if (!token) return {};
+    return { 'Authorization': `Bearer ${token}` };
   }
 
   // Task operations
@@ -102,6 +104,31 @@ class ApiService {
 
     const data = await response.json();
     return data.success;
+  }
+
+  // AI Suggestion operations
+  async generateAiSuggestion(taskId: string): Promise<Task> {
+    const response = await fetch('/api/tasks/suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+      body: JSON.stringify({ taskId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Failed to generate AI suggestion' }));
+      throw new Error(error.error || 'Failed to generate AI suggestion');
+    }
+
+    const data = await response.json();
+
+    return {
+      ...data.task,
+      deadline: data.task.deadline ? new Date(data.task.deadline) : null,
+      createdAt: new Date(data.task.createdAt),
+    };
   }
 
   // Premium operations
