@@ -1,5 +1,6 @@
-import { type User, type InsertUser, type Task, type InsertTask, type PremiumRequest, type InsertPremiumRequest } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type User, type InsertUser, type Task, type InsertTask, type PremiumRequest, type InsertPremiumRequest, users, tasks, premiumRequests } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 // Storage interface for the AI To-Do Assistant
@@ -22,119 +23,96 @@ export interface IStorage {
   updatePremiumRequest(id: string, updates: Partial<PremiumRequest>): Promise<PremiumRequest | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private tasks: Map<string, Task>;
-  private premiumRequests: Map<string, PremiumRequest>;
-
-  constructor() {
-    this.users = new Map();
-    this.tasks = new Map();
-    this.premiumRequests = new Map();
-  }
-
+// DatabaseStorage implementation using PostgreSQL via Drizzle ORM
+// Referenced from javascript_database integration
+export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email,
-    );
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
     const hashedPassword = insertUser.password 
       ? await bcrypt.hash(insertUser.password, 10)
       : null;
     
-    const user: User = { 
-      id,
-      name: insertUser.name,
-      email: insertUser.email,
-      password: hashedPassword,
-      googleId: insertUser.googleId || null,
-      isPremium: false,
-      createdAt: new Date()
-    };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values({
+        ...insertUser,
+        password: hashedPassword,
+      })
+      .returning();
     return user;
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
-    const user = this.users.get(id);
-    if (!user) return undefined;
-    
-    const updatedUser = { ...user, ...updates };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
   }
 
   // Task operations
   async getTask(id: string): Promise<Task | undefined> {
-    return this.tasks.get(id);
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task || undefined;
   }
 
   async getTasksByUserId(userId: string): Promise<Task[]> {
-    return Array.from(this.tasks.values()).filter(
-      task => task.userId === userId
-    );
+    return await db.select().from(tasks).where(eq(tasks.userId, userId));
   }
 
   async createTask(userId: string, insertTask: InsertTask): Promise<Task> {
-    const id = randomUUID();
-    const task: Task = {
-      id,
-      userId,
-      title: insertTask.title,
-      description: insertTask.description || null,
-      deadline: insertTask.deadline || null,
-      priority: insertTask.priority || "Medium",
-      status: insertTask.status || "Incomplete",
-      aiSuggestion: insertTask.aiSuggestion || null,
-      createdAt: new Date()
-    };
-    this.tasks.set(id, task);
+    const [task] = await db
+      .insert(tasks)
+      .values({
+        ...insertTask,
+        userId,
+      })
+      .returning();
     return task;
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task | undefined> {
-    const task = this.tasks.get(id);
-    if (!task) return undefined;
-    
-    const updatedTask = { ...task, ...updates };
-    this.tasks.set(id, updatedTask);
-    return updatedTask;
+    const [task] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
+      .returning();
+    return task || undefined;
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    return this.tasks.delete(id);
+    const result = await db.delete(tasks).where(eq(tasks.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   // Premium request operations
   async createPremiumRequest(insertRequest: InsertPremiumRequest): Promise<PremiumRequest> {
-    const id = randomUUID();
-    const request: PremiumRequest = {
-      id,
-      userId: insertRequest.userId,
-      solanaTxId: insertRequest.solanaTxId || null,
-      status: insertRequest.status || "Pending",
-      createdAt: new Date()
-    };
-    this.premiumRequests.set(id, request);
+    const [request] = await db
+      .insert(premiumRequests)
+      .values(insertRequest)
+      .returning();
     return request;
   }
 
   async updatePremiumRequest(id: string, updates: Partial<PremiumRequest>): Promise<PremiumRequest | undefined> {
-    const request = this.premiumRequests.get(id);
-    if (!request) return undefined;
-    
-    const updatedRequest = { ...request, ...updates };
-    this.premiumRequests.set(id, updatedRequest);
-    return updatedRequest;
+    const [request] = await db
+      .update(premiumRequests)
+      .set(updates)
+      .where(eq(premiumRequests.id, id))
+      .returning();
+    return request || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
