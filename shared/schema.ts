@@ -21,6 +21,7 @@ export const tasks = pgTable("tasks", {
   deadline: timestamp("deadline"),
   priority: text("priority", { enum: ["High", "Medium", "Low"] }).default("Medium").notNull(),
   status: text("status", { enum: ["Incomplete", "Complete"] }).default("Incomplete").notNull(),
+  aiSuggestion: text("ai_suggestion"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -45,6 +46,7 @@ export const insertTaskSchema = createInsertSchema(tasks).pick({
   deadline: true,
   priority: true,
   status: true,
+  aiSuggestion: true,
 });
 
 export const insertPremiumRequestSchema = createInsertSchema(premiumRequests).pick({
