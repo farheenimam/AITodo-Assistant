@@ -48,12 +48,10 @@ export const insertTaskSchema = createInsertSchema(tasks).pick({
   status: true,
   aiSuggestion: true,
 }).extend({
-  deadline: z.union([
-    z.string().transform((str) => new Date(str)),
-    z.date(),
-    z.null(),
-    z.undefined()
-  ]).optional(),
+  deadline: z.coerce.date().nullable().optional().refine(
+    (d) => d === null || d === undefined || !Number.isNaN(d.getTime()), 
+    { message: "Invalid date" }
+  ),
 });
 
 export const insertPremiumRequestSchema = createInsertSchema(premiumRequests).pick({

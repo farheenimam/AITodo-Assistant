@@ -53,9 +53,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    // Security: Hash password if it's being updated
+    const secureUpdates = { ...updates };
+    if (Object.prototype.hasOwnProperty.call(secureUpdates, "password")) {
+      if (secureUpdates.password === null) {
+        // allow explicit null if model permits
+      } else if (typeof secureUpdates.password === "string") {
+        secureUpdates.password = await bcrypt.hash(secureUpdates.password, 10);
+      }
+    }
+    
     const [user] = await db
       .update(users)
-      .set(updates)
+      .set(secureUpdates)
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
@@ -92,8 +102,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const result = await db.delete(tasks).where(eq(tasks.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+    const rows = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
+    return Boolean(rows.length);
   }
 
   // Premium request operations
