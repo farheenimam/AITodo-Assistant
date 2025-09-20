@@ -244,7 +244,7 @@ Task: ${task.title}`;
         temperature: 0.7,
         top_p: 0.7,
         frequency_penalty: 1,
-        max_tokens: 150,
+        max_tokens: 1536,
       });
 
       // Robust response handling
