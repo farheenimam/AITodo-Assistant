@@ -47,6 +47,13 @@ export const insertTaskSchema = createInsertSchema(tasks).pick({
   priority: true,
   status: true,
   aiSuggestion: true,
+}).extend({
+  deadline: z.union([
+    z.string().transform((str) => new Date(str)),
+    z.date(),
+    z.null(),
+    z.undefined()
+  ]).optional(),
 });
 
 export const insertPremiumRequestSchema = createInsertSchema(premiumRequests).pick({
