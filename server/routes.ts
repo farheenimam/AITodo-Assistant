@@ -7,12 +7,13 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OpenAI } from "openai";
 
-const JWT_SECRET = process.env.SESSION_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required");
 }
 // Type assertion since we've validated it exists
 const jwtSecret: string = JWT_SECRET;
+
 
 // Middleware for authentication
 const authenticateToken = async (req: any, res: any, next: any) => {
