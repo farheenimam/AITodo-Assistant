@@ -1,4 +1,4 @@
-// Using fetch directly since apiRequest has a different signature
+import { API_BASE } from "../config"; // 👈 add this
 
 export interface User {
   id: string;
@@ -29,50 +29,50 @@ class AuthService {
 
   constructor() {
     // Load token from localStorage on initialization
-    this.token = localStorage.getItem('authToken');
+    this.token = localStorage.getItem("authToken");
   }
 
   async login(credentials: LoginData): Promise<User> {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
+      method: "POST",
       body: JSON.stringify(credentials),
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error || 'Login failed');
+      throw new Error(error || "Login failed");
     }
 
     const data: AuthResponse = await response.json();
     this.token = data.token;
     this.user = data.user;
-    localStorage.setItem('authToken', this.token);
-    
+    localStorage.setItem("authToken", this.token);
+
     return data.user;
   }
 
   async signup(userData: SignupData): Promise<User> {
-    const response = await fetch('/api/auth/signup', {
-      method: 'POST',
+    const response = await fetch(`${API_BASE}/api/auth/signup`, {
+      method: "POST",
       body: JSON.stringify(userData),
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error || 'Signup failed');
+      throw new Error(error || "Signup failed");
     }
 
     const data: AuthResponse = await response.json();
     this.token = data.token;
     this.user = data.user;
-    localStorage.setItem('authToken', this.token);
-    
+    localStorage.setItem("authToken", this.token);
+
     return data.user;
   }
 
@@ -82,9 +82,9 @@ class AuthService {
     }
 
     try {
-      const response = await fetch('/api/auth/me', {
+      const response = await fetch(`${API_BASE}/api/auth/me`, {
         headers: {
-          'Authorization': `Bearer ${this.token}`,
+          Authorization: `Bearer ${this.token}`,
         },
       });
 
@@ -106,7 +106,7 @@ class AuthService {
   logout(): void {
     this.token = null;
     this.user = null;
-    localStorage.removeItem('authToken');
+    localStorage.removeItem("authToken");
   }
 
   getToken(): string | null {
