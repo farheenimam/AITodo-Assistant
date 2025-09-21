@@ -30,6 +30,7 @@ interface TaskCardProps {
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onEdit: (taskId: string) => void;
   onDelete: (taskId: string) => void;
+  onGenerateAiSuggestion?: (taskId: string) => void;
   className?: string;
   showAiSuggestion?: boolean;
 }
@@ -39,6 +40,7 @@ export default function TaskCard({
   onToggleComplete, 
   onEdit, 
   onDelete, 
+  onGenerateAiSuggestion,
   className,
   showAiSuggestion = true
 }: TaskCardProps) {
@@ -60,6 +62,11 @@ export default function TaskCard({
   const handleDelete = () => {
     console.log(`Deleting task ${task.id}`);
     onDelete(task.id);
+  };
+
+  const handleGenerateAiSuggestion = () => {
+    console.log(`Generating AI suggestion for task ${task.id}`);
+    onGenerateAiSuggestion?.(task.id);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -157,16 +164,35 @@ export default function TaskCard({
             </div>
           )}
 
-          {showAiSuggestion && task.aiSuggestion && (
-            <div className="bg-premium/5 border border-premium/20 rounded-md p-3">
-              <div className="flex items-start space-x-2">
-                <Sparkles className="w-4 h-4 text-premium mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs font-medium text-premium mb-1">AI Suggestion</p>
-                  <p className="text-sm text-muted-foreground">{task.aiSuggestion}</p>
+          {showAiSuggestion && (
+            task.aiSuggestion ? (
+              <div className="bg-premium/5 border border-premium/20 rounded-md p-3">
+                <div className="flex items-start space-x-2">
+                  <Sparkles className="w-4 h-4 text-premium mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-premium mb-1">AI Suggestion</p>
+                    <p className="text-sm text-muted-foreground">{task.aiSuggestion}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-muted/30 border border-muted rounded-md p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Get AI suggestion for this task</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGenerateAiSuggestion}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Generate
+                  </Button>
+                </div>
+              </div>
+            )
           )}
 
           <div className="flex items-center justify-between">

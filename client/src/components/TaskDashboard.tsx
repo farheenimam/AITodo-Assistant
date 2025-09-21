@@ -7,6 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import TaskCard, { type Task } from "./TaskCard";
 import TaskForm, { type TaskFormData } from "./TaskForm";
 import PremiumUpgrade from "./PremiumUpgrade";
+import { apiService } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Search, 
   Filter, 
@@ -54,6 +56,7 @@ export default function TaskDashboard({
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const { toast } = useToast();
 
   // Filter tasks based on active filter and search
   const filteredTasks = tasks.filter(task => {
@@ -131,6 +134,23 @@ export default function TaskDashboard({
   const handleUpgradeClick = () => {
     console.log("Opening upgrade modal");
     setShowUpgrade(true);
+  };
+
+  const handleGenerateAiSuggestion = async (taskId: string) => {
+    try {
+      const updatedTask = await apiService.generateAiSuggestion(taskId);
+      onUpdateTask(taskId, { aiSuggestion: updatedTask.aiSuggestion });
+      toast({
+        title: "AI suggestion generated!",
+        description: "Check your task for the new AI-powered recommendation",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to generate AI suggestion",
+        description: error instanceof Error ? error.message : "Please try again later",
+        variant: "destructive",
+      });
+    }
   };
 
   // Calculate AI suggestions usage for free users
@@ -282,6 +302,7 @@ export default function TaskDashboard({
                 onToggleComplete={handleToggleComplete}
                 onEdit={handleEditTask}
                 onDelete={onDeleteTask}
+                onGenerateAiSuggestion={handleGenerateAiSuggestion}
                 showAiSuggestion={user.isPremium || aiSuggestionsUsed < maxFreeSuggestions}
               />
             ))}

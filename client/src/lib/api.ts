@@ -106,6 +106,24 @@ class ApiService {
     return data.success;
   }
 
+  // AI Schedule operations
+  async generateAiSchedule(): Promise<any> {
+    const response = await fetch('/api/schedule/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Failed to generate AI schedule' }));
+      throw new Error(error.error || 'Failed to generate AI schedule');
+    }
+
+    return response.json();
+  }
+
   // AI Suggestion operations
   async generateAiSuggestion(taskId: string): Promise<Task> {
     const response = await fetch('/api/tasks/suggestions', {

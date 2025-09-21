@@ -176,6 +176,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     taskId: z.string().min(1, "Task ID is required"),
   });
 
+  // AI Schedule Generation endpoint
+  const aiScheduleSchema = z.object({
+    taskIds: z.array(z.string()).optional(),
+  });
+
   app.post("/api/tasks/suggestions", authenticateToken, async (req: any, res) => {
     try {
       // Validate request body
@@ -234,7 +239,7 @@ Task: ${task.title}`;
       prompt += `\n\nProvide a concise, actionable suggestion (1-2 sentences) that helps the user complete this task more effectively. Focus on time management, task breakdown, or productivity tips.`;
 
       const response = await client.chat.completions.create({
-        model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        model: "mistralai/mistral-nemo",
         messages: [
           {
             role: "user",
@@ -270,6 +275,159 @@ Task: ${task.title}`;
         return res.status(400).json({ error: "Invalid request data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to generate AI suggestion" });
+    }
+  });
+
+  // AI Schedule Generation endpoint
+  app.post("/api/schedule/generate", authenticateToken, async (req: any, res) => {
+    try {
+      // Get user's incomplete tasks
+      const userTasks = await storage.getTasksByUserId(req.user.id);
+      const incompleteTasks = userTasks.filter(task => task.status === "Incomplete");
+
+      if (incompleteTasks.length === 0) {
+        return res.status(400).json({ error: "No incomplete tasks to schedule" });
+      }
+
+      // Check premium limits for AI scheduling
+      if (!req.user.isPremium && incompleteTasks.length > 5) {
+        return res.status(403).json({ 
+          error: "Free users can schedule up to 5 tasks. Upgrade to premium for unlimited scheduling." 
+        });
+      }
+
+      const aiApiKey = process.env.AI_API_KEY;
+      if (!aiApiKey) {
+        console.error("AI_API_KEY not found in environment variables");
+        return res.status(500).json({ error: "AI service not configured" });
+      }
+
+      // Initialize OpenAI client
+      const client = new OpenAI({
+        baseURL: "https://api.aimlapi.com/v1",
+        apiKey: aiApiKey,
+      });
+
+      console.log(`Generating AI schedule for ${incompleteTasks.length} tasks for user ${req.user.id}`);
+
+      // Create context for AI scheduling
+      const tasksContext = incompleteTasks.map(task => {
+        const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString() : "No deadline";
+        return `- "${task.title}" (Priority: ${task.priority}, Deadline: ${deadlineStr})`;
+      }).join('\n');
+
+      const prompt = `You are a productivity expert AI. Analyze these tasks and create an optimized daily schedule.
+
+Tasks to schedule:
+${tasksContext}
+
+Create scheduling recommendations that:
+1. Prioritize high-priority tasks during peak productivity hours (9-11 AM)
+2. Consider deadlines and urgency
+3. Suggest realistic time blocks (1-3 hours per task)
+4. Include brief reasoning for each scheduling decision
+5. Optimize for productivity flow and energy management
+
+IMPORTANT: Respond ONLY with a valid JSON array. No additional text or explanation outside the JSON.
+
+Format each schedule item exactly like this:
+[
+  {
+    "taskTitle": "Task name here",
+    "priority": "High|Medium|Low",
+    "suggestedTimeSlot": "9:00 - 11:00",
+    "estimatedDuration": "2 hours",
+    "reasoning": "Brief explanation for timing choice"
+  }
+]
+
+Keep reasoning concise (1-2 sentences) and focus on productivity optimization.`;
+
+      const response = await client.chat.completions.create({
+        model: "mistralai/mistral-nemo",
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        top_p: 0.7,
+        frequency_penalty: 1,
+        max_tokens: 2048,
+      });
+
+      if (!response.choices || response.choices.length === 0) {
+        console.error("AI API returned no choices");
+        return res.status(500).json({ error: "No schedule generated" });
+      }
+
+      const aiResponse = response.choices[0].message?.content?.trim();
+      if (!aiResponse) {
+        console.error("AI API returned empty response");
+        return res.status(500).json({ error: "Empty schedule response" });
+      }
+
+      console.log("AI response received, length:", aiResponse.length);
+
+      // Try to parse JSON response, fallback to structured text if needed
+      let scheduleData;
+      try {
+        // Clean the response to extract JSON if wrapped in markdown or extra text
+        let cleanResponse = aiResponse.trim();
+        
+        // Remove markdown code blocks if present
+        if (cleanResponse.startsWith('```json')) {
+          cleanResponse = cleanResponse.replace(/```json\s*/, '').replace(/```\s*$/, '');
+        } else if (cleanResponse.startsWith('```')) {
+          cleanResponse = cleanResponse.replace(/```\s*/, '').replace(/```\s*$/, '');
+        }
+        
+        // Find JSON array in the response
+        const jsonMatch = cleanResponse.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          cleanResponse = jsonMatch[0];
+        }
+        
+        scheduleData = JSON.parse(cleanResponse);
+        
+        // Validate the structure
+        if (!Array.isArray(scheduleData)) {
+          throw new Error("Response is not an array");
+        }
+        
+        // Ensure all required fields are present
+        scheduleData = scheduleData.map((item, index) => ({
+          taskTitle: item.taskTitle || incompleteTasks[index]?.title || "Unknown Task",
+          priority: item.priority || incompleteTasks[index]?.priority || "Medium",
+          suggestedTimeSlot: item.suggestedTimeSlot || `${9 + (index * 2)}:00 - ${11 + (index * 2)}:00`,
+          estimatedDuration: item.estimatedDuration || "2 hours",
+          reasoning: item.reasoning || `${item.priority || "Medium"} priority task scheduled for optimal productivity`
+        }));
+        
+      } catch (parseError) {
+        // If JSON parsing fails, create a basic schedule structure
+        console.log("AI response parsing failed, creating fallback schedule:", parseError);
+        console.log("Original AI response:", aiResponse);
+        
+        scheduleData = incompleteTasks.map((task, index) => ({
+          taskTitle: task.title,
+          priority: task.priority,
+          suggestedTimeSlot: `${9 + (index * 2)}:00 - ${11 + (index * 2)}:00`,
+          estimatedDuration: "2 hours",
+          reasoning: `${task.priority} priority task scheduled based on deadline and importance`
+        }));
+      }
+
+      res.json({ 
+        schedule: scheduleData,
+        totalTasks: incompleteTasks.length,
+        generatedAt: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error("AI schedule generation error:", error);
+      res.status(500).json({ error: "Failed to generate AI schedule" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,7 +40,9 @@ interface DashboardSidebarProps {
   onUpgrade: () => void;
   onLogout: () => void;
   onFilterChange: (filter: string) => void;
+  onViewChange: (view: "tasks" | "schedule") => void;
   activeFilter: string;
+  activeView: "tasks" | "schedule";
   taskCounts: {
     all: number;
     incomplete: number;
@@ -55,7 +57,9 @@ export default function DashboardSidebar({
   onUpgrade, 
   onLogout, 
   onFilterChange,
+  onViewChange,
   activeFilter,
+  activeView,
   taskCounts 
 }: DashboardSidebarProps) {
   const handleCreateTask = () => {
@@ -76,6 +80,11 @@ export default function DashboardSidebar({
   const handleFilterChange = (filter: string) => {
     console.log(`Filter changed to: ${filter}`);
     onFilterChange(filter);
+  };
+
+  const handleViewChange = (view: "tasks" | "schedule") => {
+    console.log(`View changed to: ${view}`);
+    onViewChange(view);
   };
 
   const filterOptions = [
@@ -116,17 +125,17 @@ export default function DashboardSidebar({
                     {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-sidebar-foreground">{user.name}</p>
+                <div className="text-left flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
                     {user.isPremium && (
-                      <Badge variant="outline" className="bg-premium/10 text-premium border-premium/20 text-xs px-1">
+                      <Badge variant="outline" className="bg-premium/10 text-premium border-premium/20 text-xs px-1 flex-shrink-0">
                         <Crown className="w-3 h-3 mr-1" />
                         Pro
                       </Badge>
                     )}
                   </div>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
               </div>
               <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -209,7 +218,11 @@ export default function DashboardSidebar({
           
           <Button
             variant="ghost"
-            className="w-full justify-start font-normal"
+            onClick={() => handleViewChange("schedule")}
+            className={cn(
+              "w-full justify-start font-normal",
+              activeView === "schedule" && "bg-sidebar-accent text-sidebar-accent-foreground"
+            )}
             data-testid="button-smart-schedule"
           >
             <Calendar className="w-4 h-4 mr-2" />
@@ -218,11 +231,15 @@ export default function DashboardSidebar({
           
           <Button
             variant="ghost"
-            className="w-full justify-start font-normal"
-            data-testid="button-productivity-insights"
+            onClick={() => handleViewChange("tasks")}
+            className={cn(
+              "w-full justify-start font-normal",
+              activeView === "tasks" && "bg-sidebar-accent text-sidebar-accent-foreground"
+            )}
+            data-testid="button-task-view"
           >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Insights
+            <CheckSquare className="w-4 h-4 mr-2" />
+            Task View
           </Button>
         </div>
       </div>
