@@ -1,3 +1,4 @@
+import cors from "cors";
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
@@ -6,6 +7,13 @@ import { setupVite, serveStatic, log } from "./vite";
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Allow frontend to call backend
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*",  // safer: set to your Render frontend URL
+  credentials: true,
+}));
+
 
 app.use((req, res, next) => {
   const start = Date.now();
