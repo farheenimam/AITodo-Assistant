@@ -17,10 +17,10 @@ services:
         value: 10000
 
   - type: static
-    name: ai-task-frontend
+    name: aitodo-assistant
     rootDir: client
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://ai-task-backend.onrender.com
+        value: https://aitodo-assistant-1.onrender.com
