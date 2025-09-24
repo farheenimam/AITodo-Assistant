@@ -20,7 +20,6 @@
 * [Demo / Preview](#-demo--preview)
 * [Future Enhancements](#-future-enhancements)
 * [Contributing](#-contributing)
-* [License](#-license)
 * [Contact](#-contact)
 
 ---
@@ -147,12 +146,6 @@ We welcome contributions!
 2. Create a new branch (`feature/your-feature`)
 3. Commit changes
 4. Push and create a PR
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
